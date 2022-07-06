@@ -1,0 +1,60 @@
+<div class="container columna">
+  <div class="semaforo">
+    <div id="semaforo_conteo_semaforos_creados_R" class="trafic_light" onclick="get_data(conteo_semaforos_creados, 'R')" style="cursor: pointer;"></div>
+    <div id="semaforo_conteo_semaforos_creados_Y" class="trafic_light" onclick="get_data(conteo_semaforos_creados, 'Y')" style="cursor: pointer;"></div>
+    <div id="semaforo_conteo_semaforos_creados_G" class="trafic_light" onclick="get_data(conteo_semaforos_creados, 'G')" style="cursor: pointer;"></div>
+  </div>
+  
+  <div class="stick" style="cursor: pointer;" title="queso" id="semaforo_conteo_semaforos_creados_time"></div>
+  <div class="floor"></div>
+
+  
+  <table class="columna">
+    <tr>
+      <td>
+        <label>MAC:</label>
+      </td>
+      <td >
+        <input
+          id="semaforo_conteo_semaforos_creados_Nn"
+          type="text"
+          onchange="setTwoNumberDecimal(conteo_semaforos_creados, 'N', false)"
+          title="Esta es la MAC del xbee del controlador"
+        ></input>
+      </td>      
+    </tr>
+    <tr>
+      <td>
+        <label>Cero:</label>
+      </td>
+      <td >
+        <input
+          id="semaforo_conteo_semaforos_creados_Cn"
+          type="number"
+          onchange="setTwoNumberDecimal(conteo_semaforos_creados, 'C', true)"
+          min="1"
+          max="100"
+          step="1"
+          value="1"
+          title="Este valor debe ser mayor a cero y menor a la suma de R+Y+G"
+        ></input>
+      </td>      
+    </tr>
+    <tr>
+      <table class="columna">
+        <tr>
+          <td>
+            <label id="semaforo_conteo_semaforos_creados_Rv">Rojo: </label>
+          </td>
+          <td>
+            <label id="semaforo_conteo_semaforos_creados_Yv">Yellow: </label>
+          </td>
+          <td>
+            <label id="semaforo_conteo_semaforos_creados_Gv">Green: </label>
+          </td>
+        </tr>
+      </table>      
+    </tr>
+  </table>  
+  
+</div>
