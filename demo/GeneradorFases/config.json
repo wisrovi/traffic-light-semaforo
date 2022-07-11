@@ -1,0 +1,11 @@
+{
+    "times": {
+        "red": 30,
+        "yellow": 3,
+        "green": 30
+    },
+    "secure": {
+        "green": 5,
+        "red" : 2
+    }
+}
