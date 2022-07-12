@@ -3,7 +3,7 @@
         "name": "maestra",
         "mac": "0013A20041041B1E",
         "config": {
-            "opuesto": "",
+            "opuesto": [],
             "espejo": "",
             "principal": true
         }
@@ -12,7 +12,7 @@
         "name": "slave 1 (afuera)",
         "mac": "0013A20040B15FED",
         "config": {
-            "opuesto": "",
+            "opuesto": [],
             "espejo": "0013A20041041B1E",
             "principal": false
         }
@@ -21,17 +21,35 @@
         "name": "slave 2 (sala)",
         "mac": "0013A20040E276CF",
         "config": {
-            "opuesto": "0013A20041041B1E",
+            "opuesto": ["0013A20041041B1E", "0013A200417E97E0"],
             "espejo": "",
             "principal": false
         }
     },
     {
-        "name": "slave 3 (sala)",
+        "name": "slave 3 (ctr1)",
         "mac": "0013A200417E97E0",
         "config": {
-            "opuesto": "",
-            "espejo": "0013A20040E276CF",
+            "opuesto": [],
+            "espejo": "0013A200417E95D6",
+            "principal": false
+        }
+    },
+    {
+        "name": "slave 4 (ctr2)",
+        "mac": "0013A200417E95D6",
+        "config": {
+            "opuesto": [],
+            "espejo": "0013A20041041B1E",
+            "principal": false
+        }
+    },
+    {
+        "name": "slave 5 (ctr3)",
+        "mac": "0013A200417E968A",
+        "config": {
+            "opuesto": [""],
+            "espejo": "0013A200417E97E0",
             "principal": false
         }
     }

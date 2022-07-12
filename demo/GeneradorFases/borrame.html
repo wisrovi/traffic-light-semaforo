@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>Heptágono con canvas</title>
+
+    
+  </head>
+
+  <body>
+    <canvas id="canvas"></canvas>
+  </body>
+
+  <script>
+    /**
+     * Ejercicios con Canvas y JavaScript: dibujo de figuras geométricas
+     *
+     * https://parzibyte.me/blog
+     */
+    const ALTURA_CANVAS = 200,
+      ANCHURA_CANVAS = 400;
+
+    // Obtener el elemento del DOM
+    const canvas = document.querySelector("#canvas");
+    canvas.width = ANCHURA_CANVAS;
+    canvas.height = ALTURA_CANVAS;
+    // Del canvas, obtener el contexto para poder dibujar
+    const contexto = canvas.getContext("2d");
+    // Estilo de dibujo
+    // Grosor de línea
+    contexto.lineWidth = 5;
+    // Color de línea
+    contexto.strokeStyle = "#212121";
+    // Color de relleno
+    contexto.fillStyle = "#FFEB3B ";
+    // Comenzamos la ruta de dibujo, o path
+    contexto.beginPath();
+    // Esquina superior izquierda
+    contexto.moveTo(35, 5);
+    // Línea recta superior
+    contexto.lineTo(95, 5);
+    // Esquina central derecha
+    contexto.lineTo(125, 45);
+    // Esquina inferior derecha
+    contexto.lineTo(115, 95);
+    // Esquina inferior central
+    contexto.lineTo(65, 115);
+    // Esquina inferior izquierda
+    contexto.lineTo(15, 95);
+    // Esquina central izquierda
+    contexto.lineTo(5, 45);
+    // Y dejamos que la última línea la dibuje JS
+    contexto.closePath();
+    // Hacemos que se dibuje
+    contexto.stroke();
+    // Lo rellenamos
+    contexto.fill();
+
+
+    
+  </script>
+</html>

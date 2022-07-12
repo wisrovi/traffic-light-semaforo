@@ -1,11 +1,10 @@
 {
     "times": {
-        "red": 30,
+        "red": 10,
         "yellow": 3,
-        "green": 30
+        "green": 10
     },
     "secure": {
-        "green": 5,
         "red" : 2
     }
 }

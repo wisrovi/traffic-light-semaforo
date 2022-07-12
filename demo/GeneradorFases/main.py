@@ -1,189 +1,287 @@
-from collections import Counter
 import json
-from traceback import print_tb
-from termcolor import colored
-
-class Print_color:
-    HEADER = '\033[95m'
-    OKBLUE = '\033[94m'
-    OKCYAN = '\033[96m'
-    OKGREEN = '\033[92m'
-    WARNING = '\033[93m'
-    FAIL = '\033[91m'
-    ENDC = '\033[0m'
-    BOLD = '\033[1m'
-    UNDERLINE = '\033[4m'
-
-    def yellow(self, text, fin:bool=False) -> None:
-        return self.WARNING + text + self.ENDC
-    def green(self, text):
-        return self.OKGREEN + text + self.ENDC
-    def red(self, text):
-        return self.FAIL + text + self.ENDC
-    def blue(self, text):
-        return self.OKBLUE + text + self.ENDC
-    def subline(self, text):
-        return self.UNDERLINE + text + self.ENDC
-
-
-MOLDE = None
-with open("template.json", "r") as file:
-    data = file.read()
-    MOLDE = json.loads(data)
-
-config_cruce= None
-with open("config_cruce.json", "r") as file:
-    data = file.read()
-    config_cruce = json.loads(data)
-
-config= None
-with open("config.json", "r") as file:
-    data = file.read()
-    config = json.loads(data)
-
-
+import sys
+import matplotlib.pyplot as plt
+import networkx as nx
+from libraries.Print_color import colored, Print_color
 
 pc = Print_color()
 
 
-def graph_time(linea_tiempo):
-    grafico = list()
-    for t in linea_tiempo:
-        if t == "R":
-            grafico.append(  colored("R", "red")  )
-        elif t == "RY":
-            grafico.append(  pc.subline(colored("RY", "blue"))  )
-        elif t == "Y":
-            grafico.append(  colored("Y", "yellow")  )
-        elif t == "G":
-            grafico.append(  colored("G", "green")  )
-        else:       
-            grafico.append(  colored("-", "red")  )
-                
+class CruceSemaforo():
+    semaforos = dict()
 
-    for g in grafico:
-        print(g, end=" ")
-    print()
+    def __init__(self):
+        self.MOLDE = None
+        with open("template.json", "r") as file:
+            data = file.read()
+            self.MOLDE = json.loads(data)
 
+        self.config_cruce = None
+        with open("config_cruce.json", "r") as file:
+            data = file.read()
+            self.config_cruce = json.loads(data)
 
-def find_vector_time(times):
-    linea_tiempo_return = list()
-    for i, t in enumerate(times):
-        if t[0] == "R":  # RED
-            for j in range(t[1]):
-                linea_tiempo_return.append("R")
-        if t[0] == "G":  # GREEN
-            for j in range(t[1]):
-                linea_tiempo_return.append("G")
-        if t[0] == "Y":  # YELLOW
-            for j in range(t[1]):
-                linea_tiempo_return.append("Y")
-        
-    return linea_tiempo_return
+        self.config = None
+        with open("config.json", "r") as file:
+            data = file.read()
+            self.config = json.loads(data)
 
+        self.tiempo_verde = self.config['times']['green']
+        self.tiempo_amarillo = self.config['times']['yellow']
+        self.tiempo_seguro = self.config['secure']['red']
 
-def calcular_tiempos_de_vector(tiempos):  
-    last = tiempos[0]  
-    conteo = 0
-    data = list()
-    if bool(tiempos):
-        for now in tiempos:
-            if now != last:
-                data_save = (last, conteo)
-                data.append(data_save)
-                conteo = 1
+        self.__valid_cruce()
+        self.__valid_tiempo_base()
+
+    def get_config_files(self):
+        return self.MOLDE, self.config_cruce, self.config
+
+    def __hallar_opuestos_pendientes(self):
+        opuesto_mas_amplio = 0
+        lista_opuestos_mas_amplio = list()
+        for i, controladora in enumerate(self.config_cruce):
+            opuestos = controladora['config']['opuesto']
+            if opuesto_mas_amplio < len(opuestos):
+                if controladora['mac'] not in self.semaforos:
+                    opuesto_mas_amplio = len(opuestos)
+                    lista_opuestos_mas_amplio = [controladora['mac']] + opuestos
+        opuesto_mas_amplio += 1
+
+        return lista_opuestos_mas_amplio
+
+    def __valid_tiempo_base(self):
+        for _ in range(len(self.config_cruce)):
+            lista_opuestos_mas_amplio = self.__hallar_opuestos_pendientes()
+            opuesto_mas_amplio = len(lista_opuestos_mas_amplio)
+
+            if opuesto_mas_amplio > 0:
+                self.__crear_opuestos(lista_opuestos_mas_amplio)
+            self.__crear_espejos()
+
+        for i, controladora in enumerate(self.config_cruce):
+            # print(k, self.calcular_tiempos_de_vector(v))
+            v = self.semaforos.get(controladora['mac'])
+            print(controladora['mac'], end=": ")
+            if v is not None:
+                self.graph_time(v)
+
+    def __crear_espejos(self):
+        for i, controladora in enumerate(self.config_cruce):
+            espejo = controladora['config']['espejo']
+            mac = controladora['mac']
+            if mac not in self.semaforos:
+                if espejo in self.semaforos:
+                    self.semaforos[mac] = self.semaforos[espejo]
+
+    def __crear_opuestos(self, lista):
+        reduccion_verde = int(self.tiempo_verde * 0.3)
+        tiempo_verde = self.tiempo_verde - reduccion_verde
+        base = list()
+        for _ in lista:
+            for _ in range(self.tiempo_seguro):
+                base.append("R")
+            for _ in range(tiempo_verde):
+                base.append("G")
+            for _ in range(reduccion_verde):
+                base.append("P")
+            for _ in range(self.tiempo_amarillo):
+                base.append("Y")
+
+        corte = self.tiempo_seguro + tiempo_verde + reduccion_verde + self.tiempo_amarillo
+        self.semaforos = dict()
+        for i, mac in enumerate(lista):
+            temporal = list()
+            for j, d in enumerate(base):
+                if j >= corte * (i) and j <= corte * (i + 1):
+                    temporal.append(d)
+                else:
+                    temporal.append("R")
+            self.semaforos[mac] = temporal
+
+    def __valid_cruce(self):
+        """
+            Validar que exista a una categoria:
+            - principal: solo puede haber uno
+            - espejo: reflejo de otro semaforo
+            - opuesto: es una lista de los semaforos opuestos
+        """
+        conteo_principales = 0
+        for i, controladora in enumerate(self.config_cruce):
+            es_principal = controladora['config']['principal']
+            espejos = len(controladora['config']['espejo'])
+            opuestos = len(controladora['config']['opuesto'])
+            if espejos == 0 and opuestos == 0 and not es_principal:
+                print(
+                    f"Error la mac {controladora['mac']} no tiene una configuracion, no es principal, tiene espejo u opuestos")
+                sys.exit()
+            if es_principal:
+                conteo_principales += 1
+
+        if conteo_principales != 1:
+            print(f"Debe haber UN principal, en el momento hay {conteo_principales} principales")
+            sys.exit()
+
+    @staticmethod
+    def graph_time(linea_tiempo):
+        grafico = list()
+        for t in linea_tiempo:
+            if t == "R":
+                grafico.append(colored("R", "red"))
+            elif t == "S":
+                grafico.append(pc.subline(colored("S", "red")))
+            elif t == "Y":
+                grafico.append(colored("Y", "yellow"))
+            elif t == "G":
+                grafico.append(colored("G", "green"))
+            elif t == "P":
+                grafico.append(pc.subline(colored("G", "green")))
             else:
-                conteo += 1
+                grafico.append(colored("-", "red"))
+
+        for g in grafico:
+            print(g, end=" ")
+        print()
+
+    @staticmethod
+    def calcular_tiempos_de_vector(tiempos):
+        last = tiempos[0]
+        conteo = 0
+        data = list()
+        if bool(tiempos):
+            for now in tiempos:
+                if now != last:
+                    data_save = (last, conteo)
+                    data.append(data_save)
+                    conteo = 1
+                else:
+                    conteo += 1
+                last = now
+            data_save = (last, conteo)
+            data.append(data_save)
+
+            return data
+
+    @staticmethod
+    def hallar_opuesto_1a1(time):
+        # https://www.youtube.com/watch?v=rs2GpmjRTf0
+        nuevo_opuesto = [0 for _ in time]
+        startR, stopR, last = None, None, None
+        for i, now in enumerate(time):
+            if now == "G" or now == "Y":
+                nuevo_opuesto[i] = "R"
+            if now == "R":
+                if startR is None:
+                    startR = i
+            if last == "R" and now != "R":
+                if stopR is None:
+                    stopR = i
             last = now
-        data_save = (last, conteo)
-        data.append(data_save)
 
-        return data
+        if startR is not None and stopR is not None:
+            for i, id in enumerate(range(startR, stopR, 1)):
+                fin = config['times']['yellow']
+                if i < stopR - fin:
+                    if i >= config['secure']['red'] * 2:
+                        nuevo_opuesto[id] = "G"
+                    else:
+                        nuevo_opuesto[id] = "R"
+                else:
+                    nuevo_opuesto[id] = "Y"
 
+        if len(nuevo_opuesto) >= config['secure']['red']:
+            for _ in range(config['secure']['red']):
+                nuevo_opuesto.append(nuevo_opuesto.pop(0))
 
-def hallar_opuesto(time):
-    # https://www.youtube.com/watch?v=rs2GpmjRTf0
-    nuevo_opuesto = [0 for _ in time]
-    startR, stopR, last = None, None, None
-    for i, now in enumerate(time):
-        if now == "G" or  now == "Y":
-            nuevo_opuesto[i] = "R"
-        if now == "R":
-            if startR is None:
-                startR = i
-        if last == "R" and now != "R":
-            if stopR is None:
-                stopR = i
-        last = now
-    
-    if startR is not None and stopR is not None:
-        for i, id in enumerate(range(startR, stopR , 1)):
-            fin = config['times']['yellow']
-            if i < stopR-fin:
-                if i >= config['secure']['red']*2:
-                    nuevo_opuesto[id] = "G"
-                else:                    
-                    nuevo_opuesto[id] = "R"
-            else:
-                nuevo_opuesto[id] = "Y"
-
-    if len(nuevo_opuesto) >= config['secure']['red']:
-        for _ in range(config['secure']['red']):
-            nuevo_opuesto.append(nuevo_opuesto.pop(0))
-    
-    return nuevo_opuesto
+        return nuevo_opuesto
 
 
+"""
+Probando instancias
+"""
 
 
+data = {
+    "A": {
+        "o": ["B", "C"],
+        "e": "",
+    },
+    "B": {
+        "o": [],
+        "e": "D"
+    },
+    "C": {
+        "o": [],
+        "e": "D"
+    },
+    "D": {
+        "o": [],
+        "e": "A"
+    }
+}
 
-data = list()
-backup_tiempos = dict()
-for i, controladora in enumerate(config_cruce):
-    nuevo = MOLDE.copy()
-    nuevo['mac'] = controladora['mac']
-    nuevo['id'] = i+1
-    nuevo['name'] = controladora['name']
-    nuevo['config'] = controladora['config']
-    if controladora['config']['principal']:
-        nuevo['tiempos'] = [ 
-            ("R", config['times']['red']), 
-            ("G", config['times']['green']), 
-            ("Y", config['times']['yellow'])
-            ]
-        nuevo['conteo'] = config['times']['red'] + config['times']['yellow'] + config['times']['green']
+
+nodos = [i for i in range(len(data))]
+sizes = [1000 for _ in nodos] + [1000]
+labels = dict()
+for i, v in enumerate(data):
+    labels[i] = v
+colors = ["skyblue" for _ in labels]
+edge_colors = list()
+conexiones = list()
+for i, v in enumerate(data):
+    o = data[v]["o"]
+    e = data[v]["e"]
+    if len(o) > 0:
+        for keyA in o:
+            for j, keyB in enumerate(data):
+                if keyA == keyB:
+                    conexiones.append((i, j))
+                    edge_colors.append("red")
+                    break
     else:
-        nuevo['tiempos'] = [ 
-            ("R", 0), 
-            ("G", 0), 
-            ("Y", 0)
-            ]
-        nuevo['conteo'] = 0
-    backup_tiempos[nuevo['mac']] = nuevo['tiempos']
-    data.append(nuevo)
+        if len(e) > 0:
+            for j, keyB in enumerate(data):
+                if e == keyB:
+                    conexiones.append((i, j))
+                    break
+            edge_colors.append("blue")
+
+
+"""
+    Crendo el grafo para graficar
+"""
+
+G = nx.DiGraph()
+G.add_nodes_from(nodos)
+G.add_edges_from(conexiones)
+
+
+nx.draw_networkx(G, labels=labels, arrows=True,
+                 node_shape="s",
+                 node_color=colors,
+                 edge_color=edge_colors,  # color of the edges
+                 edgecolors="gray")  # edges of the box of node
+
+plt.title("Comunicacion Semaforo.")
+plt.legend(loc="upper left")
+plt.gca().legend(('espejo', 'opuesto'))
+plt.savefig("grafo semaforo.jpeg", dpi=300)
+plt.show()
+
+
+sys.exit()
 
 
 
+cS = CruceSemaforo()
+MOLDE, config_cruce, config = cS.get_config_files()
+
+""" 
+# https://www.ascii-art-generator.org/es.html
+# https://www.w3schools.com/REACT/DEFAULT.ASP
 
 
-for d in data:
-    if not d['config']['principal']:
-        if len(d['config']['espejo']) > 0:
-            d['tiempos'] = backup_tiempos[d['config']['espejo']]
-        else:
-            if len(d['config']['opuesto']) > 0:
-                linea_tiempo = find_vector_time(backup_tiempos[d['config']['opuesto']])  
-                nuevo_opuesto = hallar_opuesto(linea_tiempo)
-                opuesto = calcular_tiempos_de_vector(nuevo_opuesto)
-
-                backup_tiempos[d['mac']] = opuesto
-
-                d['tiempos'] = opuesto
-
-
-
-
-"""                TIPO 1
+                   TIPO 1
 
      __________             __________
     |          |     |     |          |
@@ -202,62 +300,11 @@ for d in data:
     |__________|     |     |__________|
 
 """
-
-for i, d in enumerate(data):
-    linea_tiempo = find_vector_time(d['tiempos'])   
-    graph_time(linea_tiempo) 
-
-print(data)
-    
-
-
-
-
-
-#print(data)
-
-import sys
-sys.exit()
-
-
-
 
 """
         Iniciando generador del semaforo con los tiempos estipulados
 """
 
-
-
-
-class Print_color:
-    HEADER = '\033[95m'
-    OKBLUE = '\033[94m'
-    OKCYAN = '\033[96m'
-    OKGREEN = '\033[92m'
-    WARNING = '\033[93m'
-    FAIL = '\033[91m'
-    ENDC = '\033[0m'
-    BOLD = '\033[1m'
-    UNDERLINE = '\033[4m'
-
-    def print_yellow(self, text, fin:bool=False) -> None:
-        print(self.WARNING + text + self.ENDC, end=" ")
-    def print_green(self, text):
-        print(self.OKGREEN + text + self.ENDC, end=" ")
-    def print_red(self, text):
-        print(self.FAIL + text + self.ENDC, end=" ")
-    def print_blue(self, text):
-        print(self.OKBLUE + text + self.ENDC, end=" ")
-
-pc = Print_color()
-
-ROJO = 0
-AMARILLO = 1
-VERDE = 2
-CORTE = 3
-
-
-
 """                TIPO 1
 
      __________             __________
@@ -277,50 +324,3 @@ CORTE = 3
     |__________|     |     |__________|
 
 """
-SEMAFOROS_NECESARIOS = 4
-
-
-
-data = list()
-for i in range(SEMAFOROS_NECESARIOS):
-    nuevo = MOLDE.copy()
-    nuevo['id'] = i + 1
-    nuevo['name'] = "MAC_XBEE_" + str(i + 1)
-    data.append(nuevo)
-
-for d in data:
-    print()
-    print(d.get("name") + ":", end=" ")
-    tiempos = list()
-    for i, t in enumerate(d.get("tiempos")):
-        if i == ROJO:
-            for _ in range(t):
-                tiempos.append("R")
-        if i == AMARILLO:
-            for _ in range(t):
-                tiempos.append("A")
-        if i == VERDE:  
-            for _ in range(t):
-                tiempos.append("V")        
-        if i == CORTE:
-            for _ in range(t):
-                tiempos.append(tiempos.pop(0))
-
-    for t in tiempos:
-        if t == "R":
-            pc.print_red(t)
-        if t == "A":
-            pc.print_yellow(t)
-        if t == "V":
-            pc.print_green(t)
-    print()
-
-
-
-
-
-
-from termcolor import colored
-print(colored("Queso", "red"), colored("salsa", "green"), colored("pan", "yellow"))
-
-
