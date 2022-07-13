@@ -5,7 +5,7 @@
         "config": {
             "opuesto": [],
             "espejo": "",
-            "compartido": "",
+            "compartido": "0013A200417E97E0",
             "principal": true
         }
     },
@@ -25,7 +25,7 @@
         "config": {
             "opuesto": ["0013A20041041B1E"],
             "espejo": "",
-            "compartido": "",
+            "compartido": "0013A20040B15FED",
             "principal": false
         }
     },

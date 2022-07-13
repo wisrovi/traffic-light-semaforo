@@ -5,6 +5,8 @@
         "green": 10
     },
     "secure": {
-        "red" : 2
+        "red" : 2,
+        "partir_verde" : 0.5,
+        "parpadeo_verde" : 0.3
     }
 }

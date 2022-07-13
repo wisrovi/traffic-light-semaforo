@@ -1,13 +1,16 @@
 import json
 import sys
+from typing import Dict, Any
+
 import matplotlib.pyplot as plt
+import pandas as pd
 import networkx as nx
 from libraries.Print_color import colored, Print_color
 
 pc = Print_color()
 
 
-class CruceSemaforo():
+class CruceSemaforo(object):
     semaforos = dict()
 
     def __init__(self):
@@ -30,8 +33,9 @@ class CruceSemaforo():
         self.tiempo_amarillo = self.config['times']['yellow']
         self.tiempo_seguro = self.config['secure']['red']
 
+    def process_cruce(self, show: bool = False):
         self.__valid_cruce()
-        self.__valid_tiempo_base()
+        self.__valid_tiempo_base(show)
 
     def get_config_files(self):
         return self.MOLDE, self.config_cruce, self.config
@@ -49,7 +53,7 @@ class CruceSemaforo():
 
         return lista_opuestos_mas_amplio
 
-    def __valid_tiempo_base(self):
+    def __valid_tiempo_base(self, show: bool = False):
         for _ in range(len(self.config_cruce)):
             lista_opuestos_mas_amplio = self.__hallar_opuestos_pendientes()
             opuesto_mas_amplio = len(lista_opuestos_mas_amplio)
@@ -58,12 +62,26 @@ class CruceSemaforo():
                 self.__crear_opuestos(lista_opuestos_mas_amplio)
             self.__crear_espejos()
 
-        for i, controladora in enumerate(self.config_cruce):
-            # print(k, self.calcular_tiempos_de_vector(v))
-            v = self.semaforos.get(controladora['mac'])
-            print(controladora['mac'], end=": ")
-            if v is not None:
-                self.graph_time(v)
+        #for _ in range(len(self.config_cruce)):
+        faltas = self.__correccion_final()
+        self.exitoso = True
+        if faltas > 0:
+            print("[ERROR]: hubo un problema al obedecer todas las condiciones del cruce")
+            self.exitoso = False
+
+        if show:
+            texto = str()
+            for i, controladora in enumerate(self.config_cruce):
+                # print(k, self.calcular_tiempos_de_vector(v))
+                v = self.semaforos.get(controladora['mac'])
+                if v is not None:
+                    grafico = self.graph_time(v)
+                    texto += f"{controladora['mac']}: "
+                    for g in grafico:
+                        texto += f"{g} "
+                    texto += f" [{controladora['name']}]"
+                    texto += f"\n"
+            print(texto)
 
     def __crear_espejos(self):
         for i, controladora in enumerate(self.config_cruce):
@@ -74,7 +92,7 @@ class CruceSemaforo():
                     self.semaforos[mac] = self.semaforos[espejo]
 
     def __crear_opuestos(self, lista):
-        reduccion_verde = int(self.tiempo_verde * 0.3)
+        reduccion_verde = int(self.tiempo_verde * self.config['secure']['parpadeo_verde'])
         tiempo_verde = self.tiempo_verde - reduccion_verde
         base = list()
         for _ in lista:
@@ -88,11 +106,12 @@ class CruceSemaforo():
                 base.append("Y")
 
         corte = self.tiempo_seguro + tiempo_verde + reduccion_verde + self.tiempo_amarillo
-        self.semaforos = dict()
+        if len(self.semaforos) == 0:
+            self.semaforos = dict()
         for i, mac in enumerate(lista):
             temporal = list()
             for j, d in enumerate(base):
-                if j >= corte * (i) and j <= corte * (i + 1):
+                if corte * i <= j <= corte * (i + 1):
                     temporal.append(d)
                 else:
                     temporal.append("R")
@@ -112,14 +131,71 @@ class CruceSemaforo():
             opuestos = len(controladora['config']['opuesto'])
             if espejos == 0 and opuestos == 0 and not es_principal:
                 print(
-                    f"Error la mac {controladora['mac']} no tiene una configuracion, no es principal, tiene espejo u opuestos")
-                sys.exit()
+                    f"Error la mac {controladora['mac']} no tiene una configuracion, no es principal, tiene espejo u "
+                    f"opuestos")
+                return
             if es_principal:
                 conteo_principales += 1
 
         if conteo_principales != 1:
             print(f"Debe haber UN principal, en el momento hay {conteo_principales} principales")
-            sys.exit()
+            return
+
+    def __correccion_final(self):
+        self.maximo = max([len(semaf) for mac, semaf in self.semaforos.items()])
+        for mac, semaf in self.semaforos.items():
+            if len(semaf) < self.maximo:
+                for _ in range(self.maximo-len(semaf)):
+                    semaf.append("R")
+
+        faltas = 0
+        for i, v in enumerate(self.config_cruce):
+            o = self.config_cruce[i]['config']["opuesto"]
+            e = self.config_cruce[i]['config']["espejo"]
+            actual = self.config_cruce[i]['mac']
+            if len(o) > 0:
+                # tiene opuestos
+                for opuesto in o:
+                    A = self.semaforos[actual]
+                    B = self.semaforos[opuesto]
+                    compare = A == B
+                    compare = not compare
+                    if not compare:
+                        faltas += 1
+                    #print("Opuesto:", actual, opuesto, compare)
+
+            if len(e) > 0:
+                # tiene iguales
+                A = self.semaforos[actual]
+                B = self.semaforos[e]
+                compare = A == B
+                if not compare:
+                    faltas += 1
+                #print("Igual:", actual, e, compare)
+
+        if faltas == 0:
+            for mac, vector in self.semaforos.items():
+                es_compartido = None
+                for j, d in enumerate(self.config_cruce):
+                    if mac == d['mac']:
+                        es_compartido = self.config_cruce[j]['config'].get("compartido")
+                        if len(es_compartido) == 0:
+                            es_compartido = None
+                        break
+                if es_compartido is not None:
+                    conteo = 0
+                    vector = self.semaforos[mac].copy()
+                    partir = int(self.tiempo_verde * self.config['secure']['partir_verde'])
+                    for k, t in enumerate(vector):
+                        if t == "G":
+                            if conteo < partir:
+                                vector[k] = "C"
+                                conteo += 1
+                            else:
+                                break
+                    self.semaforos[mac] = vector
+
+        return faltas
 
     @staticmethod
     def graph_time(linea_tiempo):
@@ -131,6 +207,8 @@ class CruceSemaforo():
                 grafico.append(pc.subline(colored("S", "red")))
             elif t == "Y":
                 grafico.append(colored("Y", "yellow"))
+            elif t == "C":
+                grafico.append(pc.subline(colored("R", "red")))
             elif t == "G":
                 grafico.append(colored("G", "green"))
             elif t == "P":
@@ -138,9 +216,7 @@ class CruceSemaforo():
             else:
                 grafico.append(colored("-", "red"))
 
-        for g in grafico:
-            print(g, end=" ")
-        print()
+        return grafico
 
     @staticmethod
     def calcular_tiempos_de_vector(tiempos):
@@ -161,151 +237,142 @@ class CruceSemaforo():
 
             return data
 
-    @staticmethod
-    def hallar_opuesto_1a1(time):
-        # https://www.youtube.com/watch?v=rs2GpmjRTf0
-        nuevo_opuesto = [0 for _ in time]
-        startR, stopR, last = None, None, None
-        for i, now in enumerate(time):
-            if now == "G" or now == "Y":
-                nuevo_opuesto[i] = "R"
-            if now == "R":
-                if startR is None:
-                    startR = i
-            if last == "R" and now != "R":
-                if stopR is None:
-                    stopR = i
-            last = now
+    def graficar_grafo(self, show: bool = False):
+        # https://towardsdatascience.com/graph-visualisation-basics-with-python-part-ii-directed-graph-with-networkx-5c1cd5564daa
+        # https://www.programcreek.com/python/example/89568/networkx.draw_networkx_edge_labels
 
-        if startR is not None and stopR is not None:
-            for i, id in enumerate(range(startR, stopR, 1)):
-                fin = config['times']['yellow']
-                if i < stopR - fin:
-                    if i >= config['secure']['red'] * 2:
-                        nuevo_opuesto[id] = "G"
+        nodos = [i for i in range(len(self.config_cruce))]
+        labels: Dict[int, Any] = dict()
+        colors = list()
+        for i, v in enumerate(self.config_cruce):
+            labels[i] = v['name']
+            if v['config']['principal']:
+                colors.append("mistyrose")
+            else:
+                colors.append("skyblue")
+        edge_colors = list()
+        conexiones = list()
+        edge_labels = dict()
+        for i, v in enumerate(self.config_cruce):
+            o = self.config_cruce[i]['config']["opuesto"]
+            e = self.config_cruce[i]['config']["espejo"]
+            if len(o) > 0:
+                for keyA in o:
+                    for j, keyB in enumerate(self.config_cruce):
+                        if keyA == keyB['mac']:
+                            conexiones.append((i, j))
+                            edge_colors.append("red")
+                            edge_labels[(i, j)] = "O"
+                            break
+            if len(e) > 0:
+                for j, keyB in enumerate(self.config_cruce):
+                    if e == keyB['mac']:
+                        conexiones.append((i, j))
+                        edge_labels[(i, j)] = "M"
+                        break
+                edge_colors.append("blue")
+
+
+        """Graficar"""
+        G = nx.DiGraph()
+        G.add_nodes_from(nodos)
+        G.add_edges_from(conexiones)
+
+        pos = nx.spring_layout(G)
+        nx.draw_networkx(G, labels=labels,
+                         arrows=True,
+                         pos=pos,
+                         node_shape="s",
+                         node_color=colors,
+                         edge_color=edge_colors,  # color of the edges
+                         edgecolors="gray")  # edges of the box of node
+
+        nx.draw_networkx_edge_labels(G,
+                                     pos,
+                                     font_size=10,
+                                     edge_labels=edge_labels,
+                                     font_color='black')
+        plt.title("Funcionamiento Semaforo")
+        plt.xlabel("O = opposite - M = mirror")
+        plt.ylabel("Iteraccion entre controladoras")
+        plt.savefig("grafo semaforo.jpeg", dpi=300)
+        if show:
+            plt.show()
+
+    def generar_fases(self):
+        coleccion_fases = dict()
+        tiempos = dict()
+        for mac, v in self.semaforos.items():
+            coleccion_fases[mac] = list()
+            tiempos[mac] = list()
+
+        conteo = 0
+        for i in range(self.maximo):
+            corte = False
+            for mac, v in self.semaforos.items():
+                if mac in tiempos:
+                    if len(tiempos[mac]) == 0:
+                        tiempos[mac] += [v[i]]
                     else:
-                        nuevo_opuesto[id] = "R"
+                        if tiempos[mac][-1] != v[i]:
+                            tiempos[mac] += [v[i]]
+                            corte = True
+                        else:
+                            tiempos[mac] += [v[i]]
                 else:
-                    nuevo_opuesto[id] = "Y"
+                    tiempos[mac] = [ v[i] ]
+            if corte:
+                menor = self.maximo
+                for mac, v in self.semaforos.items():
+                    if menor > len(tiempos[mac]):
+                        menor = len(tiempos[mac])
+                menor -= 1
+                for mac, v in self.semaforos.items():
+                    this_size = len(tiempos[mac])
+                    coleccion_fases[mac].append(tuple(tiempos[mac][:menor]))
+                    if menor < this_size:
+                        tiempos[mac] = tiempos[mac][menor:]
+                    else:
+                        tiempos[mac] = list()
+                    conteo = i
 
-        if len(nuevo_opuesto) >= config['secure']['red']:
-            for _ in range(config['secure']['red']):
-                nuevo_opuesto.append(nuevo_opuesto.pop(0))
+        for mac, v in self.semaforos.items():
+            coleccion_fases[mac].append(tuple(v[conteo:]))
 
-        return nuevo_opuesto
+        fases = dict()
+        for mac, v in coleccion_fases.items():
+            acumulado_este_controlador = list()
+            for f in v:
+                acumulado_este_controlador.append(self.calcular_tiempos_de_vector(list(f))[0])
+            fases[mac] = acumulado_este_controlador
+
+        return fases
+
+
+
+
+
 
 
 """
 Probando instancias
 """
-
-
-data = {
-    "A": {
-        "o": ["B", "C"],
-        "e": "",
-    },
-    "B": {
-        "o": [],
-        "e": "D"
-    },
-    "C": {
-        "o": [],
-        "e": "D"
-    },
-    "D": {
-        "o": [],
-        "e": "A"
-    }
-}
-
-
-nodos = [i for i in range(len(data))]
-sizes = [1000 for _ in nodos] + [1000]
-labels = dict()
-for i, v in enumerate(data):
-    labels[i] = v
-colors = ["skyblue" for _ in labels]
-edge_colors = list()
-conexiones = list()
-for i, v in enumerate(data):
-    o = data[v]["o"]
-    e = data[v]["e"]
-    if len(o) > 0:
-        for keyA in o:
-            for j, keyB in enumerate(data):
-                if keyA == keyB:
-                    conexiones.append((i, j))
-                    edge_colors.append("red")
-                    break
-    else:
-        if len(e) > 0:
-            for j, keyB in enumerate(data):
-                if e == keyB:
-                    conexiones.append((i, j))
-                    break
-            edge_colors.append("blue")
-
-
-"""
-    Crendo el grafo para graficar
-"""
-
-G = nx.DiGraph()
-G.add_nodes_from(nodos)
-G.add_edges_from(conexiones)
-
-
-nx.draw_networkx(G, labels=labels, arrows=True,
-                 node_shape="s",
-                 node_color=colors,
-                 edge_color=edge_colors,  # color of the edges
-                 edgecolors="gray")  # edges of the box of node
-
-plt.title("Comunicacion Semaforo.")
-plt.legend(loc="upper left")
-plt.gca().legend(('espejo', 'opuesto'))
-plt.savefig("grafo semaforo.jpeg", dpi=300)
-plt.show()
-
-
-sys.exit()
-
-
-
+# https://towardsdatascience.com/graph-visualisation-basics-with-python-part-ii-directed-graph-with-networkx-5c1cd5564daa
 cS = CruceSemaforo()
-MOLDE, config_cruce, config = cS.get_config_files()
+cS.graficar_grafo(True)
+cS.process_cruce(True)
+fases = cS.generar_fases()
+
+for mac, fas in fases.items():
+    print(mac, fas)
+
 
 """ 
 # https://www.ascii-art-generator.org/es.html
 # https://www.w3schools.com/REACT/DEFAULT.ASP
-
-
+# https://towardsdatascience.com/graph-visualisation-basics-with-python-part-ii-directed-graph-with-networkx-5c1cd5564daa
+# https://matplotlib.org/stable/gallery/text_labels_and_annotations/mathtext_asarray.html
                    TIPO 1
-
-     __________             __________
-    |          |     |     |          |
-    |          |  |  |  |  |          |
-    |          |  V  |  V  |          |
-    |__________| | | | | | |__________|
-        -->   =                -->   
-        -->   =                -->
-     ----------             ----------
-        -->   =                -->
-        -->   =                -->
-     __________             __________
-    |          |     |     |          |
-    |          |  |  |  |  |          |
-    |          |  V  |  V  |          |
-    |__________|     |     |__________|
-
-"""
-
-"""
-        Iniciando generador del semaforo con los tiempos estipulados
-"""
-
-"""                TIPO 1
 
      __________             __________
     |          |     |     |          |
