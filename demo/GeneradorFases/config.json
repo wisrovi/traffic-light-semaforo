@@ -1,12 +1,12 @@
 {
     "times": {
-        "red": 10,
-        "yellow": 3,
-        "green": 10
+        "red": 30,
+        "yellow": 10,
+        "green": 35
     },
     "secure": {
-        "red" : 2,
-        "partir_verde" : 0.5,
-        "parpadeo_verde" : 0.3
+        "red" : 5,  
+        "partir_verde" : 0.50,  
+        "parpadeo_verde" : 0.15  
     }
 }

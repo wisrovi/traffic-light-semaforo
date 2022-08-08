@@ -10,31 +10,11 @@
         }
     },
     {
-        "name": "afuera",
-        "mac": "0013A20040B15FED",
-        "config": {
-            "opuesto": [],
-            "espejo": "0013A20040E276CF",
-            "compartido": "",
-            "principal": false
-        }
-    },
-    {
         "name": "sala",
         "mac": "0013A20040E276CF",
         "config": {
             "opuesto": ["0013A20041041B1E"],
             "espejo": "",
-            "compartido": "",
-            "principal": false
-        }
-    },
-    {
-        "name": "ctr1",
-        "mac": "0013A200417E97E0",
-        "config": {
-            "opuesto": ["0013A20040B15FED"],
-            "espejo": "0013A20041041B1E",
             "compartido": "",
             "principal": false
         }
